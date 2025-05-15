@@ -1,0 +1,210 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Platformer com 10 Fases</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+      background: #87CEEB;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-family: sans-serif;
+      font-size: 20px;
+      z-index: 10;
+    }
+    #buttons {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="450"></canvas>
+  <div id="ui">
+    <div id="menu">
+      <button onclick="startGame()">Jogar</button>
+    </div>
+    <div id="pauseMenu" style="display:none;">
+      <button onclick="resumeGame()">Continuar</button>
+    </div>
+  </div>
+  <div id="buttons">
+    <button ontouchstart="moveLeft=true" ontouchend="moveLeft=false">←</button>
+    <button ontouchstart="moveRight=true" ontouchend="moveRight=false">→</button>
+    <button ontouchstart="jump=true" ontouchend="jump=false">↑</button>
+    <button onclick="togglePause()">⏸️</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let gameRunning = false;
+    let paused = false;
+    let currentLevel = 0;
+    let gravity = 0.5;
+    let keys = {};
+    let moveLeft = false, moveRight = false, jump = false;
+    let player = { x: 50, y: 0, w: 30, h: 30, vx: 0, vy: 0, grounded: false, lives: 3 };
+    const levels = [];
+
+    for (let i = 0; i < 10; i++) {
+      const platforms = [
+        { x: 0, y: 420, w: 800, h: 30 },
+        { x: 150 + i * 10, y: 350 - i * 10, w: 100, h: 20 },
+        { x: 350, y: 300, w: 100, h: 20 },
+        { x: 600, y: 250, w: 100, h: 20 },
+      ];
+      const goal = { x: 750, y: 200 };
+      const enemies = i === 9 ? [{ x: 400, y: 380, w: 40, h: 40, vx: 2 }] : [];
+      levels.push({ platforms, goal, enemies });
+    }
+
+    function drawPlayer() {
+      ctx.fillStyle = "red";
+      ctx.fillRect(player.x, player.y, player.w, player.h);
+    }
+
+    function drawPlatforms() {
+      ctx.fillStyle = "green";
+      levels[currentLevel].platforms.forEach(p => {
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+      });
+    }
+
+    function drawEnemies() {
+      ctx.fillStyle = "purple";
+      levels[currentLevel].enemies.forEach(e => {
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+      });
+    }
+
+    function drawGoal() {
+      ctx.fillStyle = "gold";
+      const g = levels[currentLevel].goal;
+      ctx.fillRect(g.x, g.y, 30, 30);
+    }
+
+    function updatePlayer() {
+      if (moveLeft) player.vx = -3;
+      else if (moveRight) player.vx = 3;
+      else player.vx = 0;
+
+      if (jump && player.grounded) {
+        player.vy = -10;
+        player.grounded = false;
+      }
+
+      player.vy += gravity;
+      player.x += player.vx;
+      player.y += player.vy;
+
+      player.grounded = false;
+      levels[currentLevel].platforms.forEach(p => {
+        if (player.x < p.x + p.w &&
+            player.x + player.w > p.x &&
+            player.y + player.h < p.y + p.h &&
+            player.y + player.h + player.vy >= p.y) {
+          player.y = p.y - player.h;
+          player.vy = 0;
+          player.grounded = true;
+        }
+      });
+
+      // Enemy collision
+      levels[currentLevel].enemies.forEach(e => {
+        e.x += e.vx;
+        if (e.x <= 0 || e.x + e.w >= canvas.width) e.vx *= -1;
+
+        if (player.x < e.x + e.w &&
+            player.x + player.w > e.x &&
+            player.y < e.y + e.h &&
+            player.y + player.h > e.y) {
+          player.lives--;
+          resetPlayer();
+        }
+      });
+
+      // Goal
+      const g = levels[currentLevel].goal;
+      if (player.x < g.x + 30 &&
+          player.x + player.w > g.x &&
+          player.y < g.y + 30 &&
+          player.y + player.h > g.y) {
+        currentLevel++;
+        if (currentLevel >= levels.length) {
+          alert("Você venceu o jogo!");
+          currentLevel = 0;
+        }
+        resetPlayer();
+      }
+
+      if (player.y > canvas.height) {
+        player.lives--;
+        resetPlayer();
+      }
+
+      if (player.lives <= 0) {
+        alert("Game Over!");
+        currentLevel = 0;
+        player.lives = 3;
+        resetPlayer();
+      }
+    }
+
+    function resetPlayer() {
+      player.x = 50;
+      player.y = 0;
+      player.vy = 0;
+      player.vx = 0;
+    }
+
+    function gameLoop() {
+      if (!gameRunning || paused) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      updatePlayer();
+      drawPlatforms();
+      drawEnemies();
+      drawGoal();
+      drawPlayer();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      document.getElementById("menu").style.display = "none";
+      gameRunning = true;
+      gameLoop();
+    }
+
+    function togglePause() {
+      paused = !paused;
+      document.getElementById("pauseMenu").style.display = paused ? "block" : "none";
+      if (!paused) gameLoop();
+    }
+
+    function resumeGame() {
+      togglePause();
+    }
+  </script>
+</body>
+</html>
